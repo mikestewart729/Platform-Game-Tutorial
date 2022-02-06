@@ -206,9 +206,54 @@ class Platformer(arcade.Window):
         Args:
            delta_time (float): How much time since the last call
         """
+        # Update the player animation
+        self.player.update_animation(delta_time)
 
-    def on_draw(self):
-        pass
+        # Update the player movement based on physics engine
+        self.physics_engine.update()
+
+        # Prevent player from walking off screen
+        if self.player.left < 0:
+            self.player.left = 0
+
+        # Check if the player has picked up a coin
+        coins_hit = arcade.check_for_collision_with_list(
+            sprite=self.player, sprite_list=self.coins
+        )
+
+        for coin in coins_hit:
+            # Add the coin value to the score
+            self.score += int(coin.properties["point_value"])
+
+            # Play the coin sound
+            arcade.play_sound(self.coin_sound)
+
+            # Remove the coin
+            coin.remove_from_sprite_lists()
+
+        # Check if the player has reached the goal
+        goal_hit = arcade.check_for_collision_with_list(
+            sprite=self.player, sprite_list=self.goals
+        )
+
+        if goal_hit:
+            # Play the victory fanfare
+            self.victory_sound.play()
+
+            # Set up the next level
+            self.level += 1
+            self.setup()
+
+    def on_draw(self) -> None:
+        arcade.start_render()
+
+        # Draw all the sprites
+        self.background.draw()
+        self.walls.draw()
+        self.coins.draw()
+        self.goals.draw()
+        self.ladders.draw()
+        self.player.draw()
 
 if __name__ == '__main__':
     window = Platformer()
