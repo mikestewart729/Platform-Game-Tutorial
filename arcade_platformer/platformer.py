@@ -11,6 +11,8 @@ Level design by Mike Stewart
 """
 # platformer.py
 
+from email.errors import BoundaryError
+from tkinter import BOTTOM
 import arcade
 import pathlib
 
@@ -29,6 +31,13 @@ PLAYER_START_X = 65
 PLAYER_START_Y = 256
 PLAYER_MOVE_SPEED = 10
 PLAYER_JUMP_SPEED = 20
+
+# Viewport margins
+# Defines how close the player has to be to scroll the viewport
+LEFT_VIEWPORT_MARGIN = 50
+RIGHT_VIEWPORT_MARGIN = 300
+TOP_VIEWPORT_MARGIN = 150
+BOTTOM_VIEWPORT_MARGIN = 150
 
 # Assets path
 ASSETS_PATH = pathlib.Path(__file__).resolve().parent.parent / "assets"
@@ -107,6 +116,9 @@ class Platformer(arcade.Window):
             background_color = game_map.background_color
         arcade.set_background_color(background_color)
 
+        # Find the map size to control viewport scrolling
+        self.map_width = (game_map.map_size.width - 1) * game_map.tile_size.width
+
         # Create the player sprite if they're not already set up
         if not self.player:
             self.player = self.create_player_sprite()
@@ -116,6 +128,10 @@ class Platformer(arcade.Window):
         self.player.center_y = PLAYER_START_Y
         self.player.change_x = 0
         self.player.change_y = 0
+
+        # Set up the viewport
+        self.view_left = 0
+        self.view_bottom = 0
 
         # Load the physics engine for this map
         self.physics_engine = arcade.PhysicsEnginePlatformer(
@@ -237,6 +253,52 @@ class Platformer(arcade.Window):
             if self.physics_engine.is_on_ladder():
                 self.player.change_y = 0
 
+    def scroll_viewport(self) -> None:
+        """ Scroll the viewport when player is too close to edges. """
+        # Scroll left
+        # Find the current left boundary
+        left_boundary = self.view_left + LEFT_VIEWPORT_MARGIN
+        
+        # Left of this boundary? If so, scroll left
+        if self.player.left < left_boundary:
+            self.view_left -= left_boundary - self.player.left
+            # Don't scroll past left edge of map
+            if self.view_left < 0:
+                self.view_left = 0
+
+        # Scroll right
+        # Find the current right boundary
+        right_boundary = self.view_left + SCREEN_WIDTH - RIGHT_VIEWPORT_MARGIN
+
+        # Right of this boundary? If so, scroll right
+        if self.player.right > right_boundary:
+            self.view_left += self.player.right - right_boundary
+            # Do not scroll past right edge of the map
+            if self.view_left > self.map_width - SCREEN_WIDTH:
+                self.view_left = self.map_width - SCREEN_WIDTH
+
+        # Scroll up
+        top_boundary = self.view_bottom + SCREEN_HEIGHT - TOP_VIEWPORT_MARGIN
+        if self.player.top > top_boundary:
+            self.view_bottom += self.player.top - top_boundary
+
+        # Scroll down 
+        bottom_boundary = self.view_bottom + BOTTOM_VIEWPORT_MARGIN
+        if self.player.bottom < bottom_boundary:
+            self.view_bottom -= bottom_boundary - self.player.bottom
+
+        # Only scroll to integers so that we do not crop pixels unexpectedly
+        self.view_bottom = int(self.view_bottom)
+        self.view_left = int(self.view_left)
+
+        # Do the scrolling
+        arcade.set_viewport(
+            left=self.view_left,
+            right=SCREEN_WIDTH + self.view_left,
+            bottom=self.view_bottom,
+            top=SCREEN_HEIGHT + self.view_bottom
+        )
+
     def on_update(self, delta_time: float):
         """
         Updates the position of game objects
@@ -281,6 +343,9 @@ class Platformer(arcade.Window):
             # Set up the next level
             self.level += 1
             self.setup()
+
+        # Set the viewport scrolling if necessary
+        self.scroll_viewport()
 
     def on_draw(self) -> None:
         arcade.start_render()
