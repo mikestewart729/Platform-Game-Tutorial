@@ -122,6 +122,16 @@ class PlatformerView(arcade.View):
             game_map, layer_name=coin_layer, scaling=MAP_SCALING
         )
 
+        # Set up the moving platforms
+        moving_platforms_layer_name = "Moving_Platforms"
+        moving_platforms = arcade.tilemap.process_layer(
+            game_map,
+            layer_name=moving_platforms_layer_name,
+            scaling=MAP_SCALING
+        )
+        for sprite in moving_platforms:
+            self.walls.append(sprite)
+
         # Set the background color
         background_color = arcade.color.FRESH_AIR
         if game_map.background_color:
@@ -141,6 +151,9 @@ class PlatformerView(arcade.View):
         self.player.change_x = 0
         self.player.change_y = 0
 
+        # Set up the enemies
+        self.enemies = self.create_enemy_sprites()
+
         # Set up the viewport
         self.view_left = 0
         self.view_bottom = 0
@@ -152,6 +165,21 @@ class PlatformerView(arcade.View):
             gravity_constant=GRAVITY,
             ladders=self.ladders
         )
+
+    def create_enemy_sprites(self) -> arcade.SpriteList:
+        """
+        Creates enemy sprites appropriate for current level
+
+        Returns:
+           arcade.SpriteList: A sprite list of enemies
+        """
+        enemies = arcade.SpriteList()
+
+        # Only enemies after level 1
+        if self.level > 1:
+            enemies.append(Enemy(1464, 320)) # Curently one enemy in fixed spot
+
+        return enemies
     
     def create_player_sprite(self) -> arcade.AnimatedWalkingSprite:
         """
@@ -348,6 +376,17 @@ class PlatformerView(arcade.View):
         # Update the player animation
         self.player.update_animation(delta_time)
 
+        # Are there enemies? Update them if so
+        self.enemies.update_animation(delta_time)
+        for enemy in self.enemies:
+            enemy.center_x += enemy.change_x
+            walls_hit = arcade.check_for_collision_with_list(
+                sprite=enemy, sprite_list=self.walls
+            )
+            # Reverse enemy motion if wall is hit
+            if walls_hit:
+                enemy.change_x *= -1
+
         # Update the player movement based on physics engine
         self.physics_engine.update()
 
@@ -369,6 +408,16 @@ class PlatformerView(arcade.View):
 
             # Remove the coin
             coin.remove_from_sprite_lists()
+
+        # Has Roz collided with an enemy?
+        enemies_hit = arcade.check_for_collision_with_list(
+            sprite=self.player, sprite_list=self.enemies
+        )
+
+        if enemies_hit:
+            self.setup()
+            title_view = TitleView() # Put a game-over screen here
+            window.show_view(title_view)
 
         # Check if the player has reached the goal
         goal_hit = arcade.check_for_collision_with_list(
@@ -395,6 +444,7 @@ class PlatformerView(arcade.View):
         self.coins.draw()
         self.goals.draw()
         self.ladders.draw()
+        self.enemies.draw()
         self.player.draw()
 
         # Draw the score on screen
@@ -579,6 +629,46 @@ class PauseView(arcade.View):
         """
         if key == arcade.key.ESCAPE:
             self.window.show_view(self.game_view)
+
+class Enemy(arcade.AnimatedWalkingSprite):
+    """ Enemy sprites with basic walking movement. """
+    def __init__(self, pos_x: int, pos_y: int) -> None:
+        super().__init__(center_x=pos_x, center_y=pos_y)
+
+        # Path to sprite images
+        texture_path = ASSETS_PATH / "images" / "enemies"
+
+        # Set up the appropriate textures
+        walking_texture_path = [
+            texture_path / "slimePurple.png",
+            texture_path / "slimePurple_move.png"
+        ]
+        standing_texture_path = texture_path / "slimePurple.png"
+
+        # Load the textures
+        self.walk_left_textures = [
+            arcade.load_texture(texture) for texture in walking_texture_path
+        ]
+
+        self.walk_right_textures = [
+            arcade.load_texture(texture, mirrored=True)
+            for texture in walking_texture_path
+        ]
+
+        self.stand_left_textures = [
+            arcade.load_texture(standing_texture_path, mirrored=True)
+        ]
+
+        self.stand_right_textures = [
+            arcade.load_texture(standing_texture_path)
+        ]
+
+        # Set the enemy defaults
+        self.state = arcade.FACE_LEFT
+        self.change_x = -PLAYER_MOVE_SPEED // 2
+
+        # Set the initial texture
+        self.texture = self.stand_left_textures[0]
 
 if __name__ == '__main__':
     window = arcade.Window(
