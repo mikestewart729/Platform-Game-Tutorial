@@ -122,6 +122,16 @@ class PlatformerView(arcade.View):
             game_map, layer_name=coin_layer, scaling=MAP_SCALING
         )
 
+        # Set up the moving platforms
+        moving_platforms_layer_name = "Moving_Platforms"
+        moving_platforms = arcade.tilemap.process_layer(
+            game_map,
+            layer_name=moving_platforms_layer_name,
+            scaling=MAP_SCALING
+        )
+        for sprite in moving_platforms:
+            self.walls.append(sprite)
+
         # Set the background color
         background_color = arcade.color.FRESH_AIR
         if game_map.background_color:
