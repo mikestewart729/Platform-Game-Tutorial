@@ -238,6 +238,12 @@ class PlatformerView(arcade.View):
                 # Play the jump sound
                 arcade.play_sound(self.jump_sound)
 
+        # Does the player wish to pause the game?
+        elif key == arcade.key.ESCAPE:
+            # Pass the current view to preserve the state
+            pause = PauseView(self)
+            self.window.show_view(pause)
+
     def on_key_release(self, key: int, modifiers: int):
         """
         Processes key releases
@@ -525,6 +531,54 @@ class InstructionsView(arcade.View):
         elif key == arcade.key.ESCAPE:
             title_view = TitleView()
             self.window.show_view(title_view)
+
+class PauseView(arcade.View):
+    """ Pause screen for when the game is paused. """
+    def __init__(self, game_view: arcade.View) -> None:
+        """ Create the pause screen. """
+        super().__init__()
+
+        # Store a reference to the underlying game view
+        self.game_view = game_view
+
+        # Store a semi-transparent color for use as an overlay
+        self.fill_color = arcade.make_transparent_color(
+            arcade.color.WHITE, transparency=150
+        )
+
+    def on_draw(self) -> None:
+        """ Draw the underlying screen, blurred, with pause text. """
+        # Draw the underlying game view
+        self.game_view.on_draw()
+
+        # Create a filled rectangle that covers the viewport
+        arcade.draw_lrtb_rectangle_filled(
+            left=self.game_view.view_left,
+            right=self.game_view.view_left + SCREEN_WIDTH,
+            top=self.game_view.view_bottom + SCREEN_HEIGHT,
+            bottom=self.game_view.view_bottom,
+            color=self.fill_color
+        )
+
+        # Next, display the pause text
+        arcade.draw_text(
+            "Paused - ESC to continue",
+            start_x=self.game_view.view_left + 180,
+            start_y=self.game_view.view_bottom + 300,
+            color=arcade.color.INDIGO,
+            font_size=40
+        )
+
+    def on_key_press(self, key: int, modifiers: int) -> None:
+        """ 
+        Resume the game when the user presses ESC. 
+        
+        Args:
+           key (int): Which key was pressed
+           modifiers (int): Which modifiers were present
+        """
+        if key == arcade.key.ESCAPE:
+            self.window.show_view(self.game_view)
 
 if __name__ == '__main__':
     window = arcade.Window(
