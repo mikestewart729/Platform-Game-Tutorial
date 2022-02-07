@@ -11,8 +11,6 @@ Level design by Mike Stewart
 """
 # platformer.py
 
-from email.errors import BoundaryError
-from tkinter import BOTTOM
 import arcade
 import pathlib
 
@@ -45,9 +43,9 @@ DEAD_ZONE = 0.1
 # Assets path
 ASSETS_PATH = pathlib.Path(__file__).resolve().parent.parent / "assets"
 
-class Platformer(arcade.Window):
+class PlatformerView(arcade.View):
     def __init__(self):
-        super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
+        super().__init__()
 
         # Lists to hold different sets of sprites
         self.coins = None
@@ -414,7 +412,124 @@ class Platformer(arcade.Window):
             font_size=40
         )
 
+class TitleView(arcade.View):
+    """
+    Displays a title screen prompting the user to begin the game.
+    Also allows the user to check instructions.
+    """
+    def __init__(self) -> None:
+        super().__init__()
+
+        # Find the title image path
+        title_image_path = ASSETS_PATH / "images" / "title_image.png"
+
+        # Load the title image
+        self.title_image = arcade.load_texture(title_image_path)
+
+        # Set the display timer
+        self.display_timer = 3.0
+
+        # Showing the instructions?
+        self.show_instructions = False
+
+    def on_update(self, delta_time: float) -> None:
+        """ Manage the timer to toggle instructions. """
+        # Count down the time
+        self.display_timer -= delta_time
+
+        # If the timer has run out, toggle the instructions
+        if self.display_timer < 0:
+            # Toggle the display of instructions
+            self.show_instructions = not self.show_instructions
+            # Reset the timer for slow flashing
+            self.display_timer = 1.0
+
+    def on_draw(self) -> None:
+        # Start the rendering loop
+        arcade.start_render()
+
+        # Draw a rectangle filled with the title image
+        arcade.draw_texture_rectangle(
+            center_x=SCREEN_WIDTH / 2, 
+            center_y=SCREEN_HEIGHT / 2,
+            width=SCREEN_WIDTH,
+            height=SCREEN_HEIGHT,
+            texture=self.title_image,
+        )
+
+        # Display the instructions?
+        if self.show_instructions:
+            arcade.draw_text(
+                "ENTER to start | I for instructions",
+                start_x=100,
+                start_y=220,
+                color=arcade.color.INDIGO,
+                font_size=40,
+            )
+
+    def on_key_press(self, key: int, modifiers: int) -> None:
+        """
+        Handle the behavior when the user presses ENTER or I
+
+        Args:
+           key (int): Which key was pressed
+           modifiers (int): Which modifiers were present?
+        """
+        if key == arcade.key.RETURN:
+            game_view = PlatformerView()
+            game_view.setup()
+            self.window.show_view(game_view)
+        elif key == arcade.key.I:
+            instructions_view = InstructionsView()
+            self.window.show_view(instructions_view)
+
+class InstructionsView(arcade.View):
+    """ Show instructions to the player. """
+    def __init__(self) -> None:
+        """ Create the instructions screen. """
+        super().__init__()
+
+        # Find the instructions image in the images folder
+        instructions_image_path = (
+            ASSETS_PATH / "images" / "instructions_image.png"
+        )
+
+        # Load the instructions image
+        self.instructions_image = arcade.load_texture(instructions_image_path)
+
+    def on_draw(self) -> None:
+        # Start the rendering loop
+        arcade.start_render()
+
+        # Draw a rectangle filled with the instructions image
+        arcade.draw_texture_rectangle(
+            center_x=SCREEN_WIDTH / 2, 
+            center_y=SCREEN_HEIGHT / 2,
+            width=SCREEN_WIDTH,
+            height=SCREEN_HEIGHT,
+            texture=self.instructions_image,
+        )
+
+    def on_key_press(self, key: int, modifiers: int) -> None:
+        """
+        Handle the behavior when the user presses ENTER or I
+
+        Args:
+           key (int): Which key was pressed
+           modifiers (int): Which modifiers were present?
+        """
+        if key == arcade.key.RETURN:
+            game_view = PlatformerView()
+            game_view.setup()
+            self.window.show_view(game_view)
+        elif key == arcade.key.ESCAPE:
+            title_view = TitleView()
+            self.window.show_view(title_view)
+
 if __name__ == '__main__':
-    window = Platformer()
-    window.setup()
+    window = arcade.Window(
+        width=SCREEN_WIDTH, height=SCREEN_HEIGHT, title=SCREEN_TITLE
+    )
+    title_view = TitleView()
+    window.show_view(title_view)
     arcade.run()
