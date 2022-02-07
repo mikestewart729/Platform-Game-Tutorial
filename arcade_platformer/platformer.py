@@ -11,8 +11,6 @@ Level design by Mike Stewart
 """
 # platformer.py
 
-from email.errors import BoundaryError
-from tkinter import BOTTOM
 import arcade
 import pathlib
 
@@ -39,12 +37,15 @@ RIGHT_VIEWPORT_MARGIN = 300
 TOP_VIEWPORT_MARGIN = 150
 BOTTOM_VIEWPORT_MARGIN = 150
 
+# Joystick control
+DEAD_ZONE = 0.1
+
 # Assets path
 ASSETS_PATH = pathlib.Path(__file__).resolve().parent.parent / "assets"
 
-class Platformer(arcade.Window):
+class PlatformerView(arcade.View):
     def __init__(self):
-        super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
+        super().__init__()
 
         # Lists to hold different sets of sprites
         self.coins = None
@@ -76,6 +77,17 @@ class Platformer(arcade.Window):
         self.victory_sound = arcade.load_sound(
             str(ASSETS_PATH / "sounds" / "victory.wav")
         )
+
+        # Check if a joystick is connected
+        joysticks = arcade.get_joysticks()
+
+        # If so, get the first one
+        if joysticks:
+            self.joystick = joysticks[0]
+            self.joystick.open()
+        # If not, flag it so code won't try to use it
+        else:
+            self.joystick = None
 
     def setup(self):
         """ Sets up game for current level """
@@ -226,6 +238,12 @@ class Platformer(arcade.Window):
                 # Play the jump sound
                 arcade.play_sound(self.jump_sound)
 
+        # Does the player wish to pause the game?
+        elif key == arcade.key.ESCAPE:
+            # Pass the current view to preserve the state
+            pause = PauseView(self)
+            self.window.show_view(pause)
+
     def on_key_release(self, key: int, modifiers: int):
         """
         Processes key releases
@@ -306,6 +324,27 @@ class Platformer(arcade.Window):
         Args:
            delta_time (float): How much time since the last call
         """
+        # First check for joystick motion
+        if self.joystick:
+        # Check if we're in the dead zone
+            if abs(self.joystick.x) > DEAD_ZONE:
+                self.player.change_x = self.joystick.x * PLAYER_MOVE_SPEED
+            else:
+                self.player.change_x = 0
+
+            if abs(self.joystick.y) > DEAD_ZONE:
+                if self.physics_engine.is_on_ladder():
+                    self.player.change_y = self.joystick.y * PLAYER_MOVE_SPEED
+                else:
+                    self.player.change_y = 0
+
+            # Did the user press the jump button?
+            if self.joystick.buttons[0]:
+                if self.physics_engine.can_jump():
+                    self.player.change_y = PLAYER_JUMP_SPEED
+                    # Play the jump sound
+                    arcade.play_sound(self.jump_sound)
+
         # Update the player animation
         self.player.update_animation(delta_time)
 
@@ -358,7 +397,193 @@ class Platformer(arcade.Window):
         self.ladders.draw()
         self.player.draw()
 
+        # Draw the score on screen
+        score_text = f"Score: {self.score}"
+
+        # First, render a black-shaded background
+        arcade.draw_text(
+            score_text,
+            start_x=10 + self.view_left,
+            start_y=10 + self.view_bottom,
+            color=arcade.csscolor.BLACK,
+            font_size=40
+        )
+
+        # Then render the text in white slightly shifted
+        arcade.draw_text(
+            score_text,
+            start_x=15 + self.view_left,
+            start_y=15 + self.view_bottom,
+            color=arcade.csscolor.WHITE,
+            font_size=40
+        )
+
+class TitleView(arcade.View):
+    """
+    Displays a title screen prompting the user to begin the game.
+    Also allows the user to check instructions.
+    """
+    def __init__(self) -> None:
+        super().__init__()
+
+        # Find the title image path
+        title_image_path = ASSETS_PATH / "images" / "title_image.png"
+
+        # Load the title image
+        self.title_image = arcade.load_texture(title_image_path)
+
+        # Set the display timer
+        self.display_timer = 3.0
+
+        # Showing the instructions?
+        self.show_instructions = False
+
+    def on_update(self, delta_time: float) -> None:
+        """ Manage the timer to toggle instructions. """
+        # Count down the time
+        self.display_timer -= delta_time
+
+        # If the timer has run out, toggle the instructions
+        if self.display_timer < 0:
+            # Toggle the display of instructions
+            self.show_instructions = not self.show_instructions
+            # Reset the timer for slow flashing
+            self.display_timer = 1.0
+
+    def on_draw(self) -> None:
+        # Start the rendering loop
+        arcade.start_render()
+
+        # Draw a rectangle filled with the title image
+        arcade.draw_texture_rectangle(
+            center_x=SCREEN_WIDTH / 2, 
+            center_y=SCREEN_HEIGHT / 2,
+            width=SCREEN_WIDTH,
+            height=SCREEN_HEIGHT,
+            texture=self.title_image,
+        )
+
+        # Display the instructions?
+        if self.show_instructions:
+            arcade.draw_text(
+                "ENTER to start | I for instructions",
+                start_x=100,
+                start_y=220,
+                color=arcade.color.INDIGO,
+                font_size=40,
+            )
+
+    def on_key_press(self, key: int, modifiers: int) -> None:
+        """
+        Handle the behavior when the user presses ENTER or I
+
+        Args:
+           key (int): Which key was pressed
+           modifiers (int): Which modifiers were present?
+        """
+        if key == arcade.key.RETURN:
+            game_view = PlatformerView()
+            game_view.setup()
+            self.window.show_view(game_view)
+        elif key == arcade.key.I:
+            instructions_view = InstructionsView()
+            self.window.show_view(instructions_view)
+
+class InstructionsView(arcade.View):
+    """ Show instructions to the player. """
+    def __init__(self) -> None:
+        """ Create the instructions screen. """
+        super().__init__()
+
+        # Find the instructions image in the images folder
+        instructions_image_path = (
+            ASSETS_PATH / "images" / "instructions_image.png"
+        )
+
+        # Load the instructions image
+        self.instructions_image = arcade.load_texture(instructions_image_path)
+
+    def on_draw(self) -> None:
+        # Start the rendering loop
+        arcade.start_render()
+
+        # Draw a rectangle filled with the instructions image
+        arcade.draw_texture_rectangle(
+            center_x=SCREEN_WIDTH / 2, 
+            center_y=SCREEN_HEIGHT / 2,
+            width=SCREEN_WIDTH,
+            height=SCREEN_HEIGHT,
+            texture=self.instructions_image,
+        )
+
+    def on_key_press(self, key: int, modifiers: int) -> None:
+        """
+        Handle the behavior when the user presses ENTER or I
+
+        Args:
+           key (int): Which key was pressed
+           modifiers (int): Which modifiers were present?
+        """
+        if key == arcade.key.RETURN:
+            game_view = PlatformerView()
+            game_view.setup()
+            self.window.show_view(game_view)
+        elif key == arcade.key.ESCAPE:
+            title_view = TitleView()
+            self.window.show_view(title_view)
+
+class PauseView(arcade.View):
+    """ Pause screen for when the game is paused. """
+    def __init__(self, game_view: arcade.View) -> None:
+        """ Create the pause screen. """
+        super().__init__()
+
+        # Store a reference to the underlying game view
+        self.game_view = game_view
+
+        # Store a semi-transparent color for use as an overlay
+        self.fill_color = arcade.make_transparent_color(
+            arcade.color.WHITE, transparency=150
+        )
+
+    def on_draw(self) -> None:
+        """ Draw the underlying screen, blurred, with pause text. """
+        # Draw the underlying game view
+        self.game_view.on_draw()
+
+        # Create a filled rectangle that covers the viewport
+        arcade.draw_lrtb_rectangle_filled(
+            left=self.game_view.view_left,
+            right=self.game_view.view_left + SCREEN_WIDTH,
+            top=self.game_view.view_bottom + SCREEN_HEIGHT,
+            bottom=self.game_view.view_bottom,
+            color=self.fill_color
+        )
+
+        # Next, display the pause text
+        arcade.draw_text(
+            "Paused - ESC to continue",
+            start_x=self.game_view.view_left + 180,
+            start_y=self.game_view.view_bottom + 300,
+            color=arcade.color.INDIGO,
+            font_size=40
+        )
+
+    def on_key_press(self, key: int, modifiers: int) -> None:
+        """ 
+        Resume the game when the user presses ESC. 
+        
+        Args:
+           key (int): Which key was pressed
+           modifiers (int): Which modifiers were present
+        """
+        if key == arcade.key.ESCAPE:
+            self.window.show_view(self.game_view)
+
 if __name__ == '__main__':
-    window = Platformer()
-    window.setup()
+    window = arcade.Window(
+        width=SCREEN_WIDTH, height=SCREEN_HEIGHT, title=SCREEN_TITLE
+    )
+    title_view = TitleView()
+    window.show_view(title_view)
     arcade.run()
